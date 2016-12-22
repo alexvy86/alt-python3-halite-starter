@@ -10,7 +10,7 @@ communicating with the Halite game environment.
 import sys
 from collections import namedtuple
 from itertools import chain, zip_longest
-
+import socket
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -93,18 +93,42 @@ class GameMap:
 # Functions for communicating with the Halite game environment (formerly contained in separate module networking.py #
 #####################################################################################################################
 
+_socket_networking = False
+_connection = None
 
 def send_string(s):
-    sys.stdout.write(s)
-    sys.stdout.write('\n')
-    sys.stdout.flush()
-
+    s += '\n'
+    if _socket_networking:
+        _connection.sendall(bytes(s, 'ascii'))
+    else:
+        sys.stdout.write(s)
+        sys.stdout.flush()
 
 def get_string():
-    return sys.stdin.readline().rstrip('\n')
+    if _socket_networking:
+        newString = ""
+        buffer = '\0'
+        while True:
+            buffer = _connection.recv(1).decode('ascii')
+            if buffer != '\n':
+                newString += str(buffer)
+            else:
+                return newString
+    else:
+        return sys.stdin.readline().rstrip('\n')
 
-
-def get_init():
+def get_init(socket_networking=False):
+    global _socket_networking
+    _socket_networking = socket_networking
+    
+    if _socket_networking:
+        # Connect to environment.
+        global _connection
+        _connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        port = int(input('Enter the port on which to connect: '))
+        _connection.connect(('localhost', port))
+        print('Connected to intermediary on port #' + str(port))
+    
     playerID = int(get_string())
     m = GameMap(get_string(), get_string())
     return playerID, m
